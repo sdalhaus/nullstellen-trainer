@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nullstellen-Übungen (3. & 4. Grade) — Schritt-für-Schritt & MathJax</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;max-width:980px;margin:24px auto;padding:12px;color:#111}
+    header{display:flex;align-items:center;gap:12px}
+    h1{font-size:1.4rem;margin:0}
+    .card{border-radius:12px;padding:16px;margin-top:14px;background:#fbfbfd;box-shadow:0 6px 18px rgba(20,20,40,0.04)}
+    .equation{font-size:1.2rem;margin:8px 0}
+    .controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    button{padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);background:white;cursor:pointer}
+    button.primary{background:#0b74de;color:white;border:none}
+    .hint{margin-top:10px;color:#b35a00}
+    .success{margin-top:10px;color:green}
+    input.root{width:140px;padding:8px;border-radius:8px;border:1px solid #ccc}
+    .fields{display:flex;gap:8px;flex-wrap:wrap}
+    footer{margin-top:18px;color:#555;font-size:0.9rem}
+    .overlay-end{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);}
+    .end-card{background:white;padding:28px;border-radius:12px;max-width:640px;text-align:center}
+    .solution{margin-top:12px;display:none;padding:12px;background:#f5f5f5;border-radius:10px}
+    .solution details{background:#fff;border-radius:8px;margin:8px 0;padding:8px 10px;border:1px solid #e8e8e8}
+    .solution summary{cursor:pointer;font-weight:600}
+  </style>
+</head>
+<body>
+  <header id="pageHeader">
+    <div>
+      <h1>Nullstellen-Übungen — Grade 3 & 4</h1>
+    </div>
+  </header>
+
+  <section class="card" id="taskCard">
+    <div class="equation" id="equation">Wird erzeugt...</div>
+
+    <div id="instruction">Gib die reellen Nullstellen in beliebiger Reihenfolge als Dezimalzahl oder Bruch ein.</div>
+
+    <div id="inputArea" style="margin-top:12px"></div>
+
+    <div class="controls">
+      <button id="submitBtn" class="primary">Prüfen</button>
+      <button id="skipBtn">Überspringen</button>
+      <button id="nextBtn" style="display:none">Weiter</button>
+      <button id="endBtn">ENDE</button>
+      <button id="showSolutionBtn" style="display:none">Lösungsweg anzeigen</button>
+    </div>
+
+    <div id="feedback"></div>
+    <div id="solutionBox" class="solution"></div>
+  </section>
+
+  <footer id="pageFooter">
+    Tipp: Akzeptierte Eingaben: ganze Zahlen, Dezimalzahlen (z. B. -1.5) oder Brüche (z. B. 3/2). Reihenfolge egal.
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const eqEl = document.getElementById('equation');
+      const inputArea = document.getElementById('inputArea');
+      const feedback = document.getElementById('feedback');
+      const solutionBox = document.getElementById('solutionBox');
+      const submitBtn = document.getElementById('submitBtn');
+      const skipBtn = document.getElementById('skipBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const endBtn = document.getElementById('endBtn');
+      const showSolutionBtn = document.getElementById('showSolutionBtn');
+
+      function renderMath(el){
+        if(!el) return;
+        if(window.MathJax){
+          if(MathJax.typesetPromise){ MathJax.typesetPromise([el]).catch(()=>{}); }
+          else if(MathJax.typeset){ MathJax.typeset([el]); }
+        }
+      }
+
+      function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+      function parseNumber(str){
+        str = String(str).trim();
+        if(!str) return NaN;
+        if(str.includes('/')){ const p=str.split('/').map(s=>s.trim()); if(p.length!==2) return NaN; const n=Number(p[0]); const d=Number(p[1]); if(Number.isFinite(n)&&Number.isFinite(d)&&d!==0) return n/d; return NaN; }
+        const n=Number(str); return Number.isFinite(n)?n:NaN;
+      }
+      function approxEqual(a,b,tol=1e-6){return Math.abs(a-b)<=tol}
+      function toIntIfClose(x,tol=1e-10){ const r=Math.round(x); return Math.abs(x-r)<tol? r: x; }
+      function round4(x){ const r=toIntIfClose(x,1e-9); return r===x? x : Math.round(x*1e4)/1e4; }
+      function uniqSorted(arr,tol=1e-9){ const a=arr.map(v=>Object.is(v,-0)?0:v).sort((x,y)=>x-y); const out=[]; for(const v of a){ if(out.length===0 || Math.abs(v-out[out.length-1])>tol) out.push(v); } return out; }
+
+      // Format-Helfer
+      function absRound(n){ return Math.abs(round4(n)); }
+      function normalFormLatex(p,q,variable){
+        const pPart = (p>=0?`+ ${absRound(p)}`:`- ${absRound(p)}`) + variable;
+        const qPart = (q>=0?`+ ${absRound(q)}`:`- ${absRound(q)}`);
+        return `x^{2} ${pPart} ${qPart} = 0`;
+      }
+      function polyPlain(obj){
+        function term(coef,power){ if(coef===0) return ''; let s=''; if(coef===-1&&power!==0) s+='-'; else if(coef!==1||power===0) s+=coef; if(power>0){s+='x'; if(power>1) s+='^'+power;} return s; }
+        if(obj.type==='cubic'){
+          const co=obj.coeffs; const parts=[term(co.a,3),term(co.b,2),term(co.c,1)].filter(Boolean);
+          return parts.join(' + ').replace(/\+ -/g,'- ')+' = 0';
+        } else {
+          const co=obj.coeffs; const parts=[term(co.A,4),term(co.B,2),term(co.C,0)].filter(Boolean);
+          return parts.join(' + ').replace(/\+ -/g,'- ')+' = 0';
+        }
+      }
+
+      function makeCubic(){
+        const a = [1,-1,2,-2][randInt(0,3)];
+        const roots = [];
+        const caseType = randInt(1,3);
+        if(caseType===1){ let r1=randInt(-4,4); while(r1===0) r1=randInt(-4,4); let r2=randInt(-4,4); while(r2===0||r2===r1) r2=randInt(-4,4); roots.push(0,r1,r2); }
+        else if(caseType===2){ let r=randInt(-3,3); while(r===0) r=randInt(-3,3); roots.push(0,r,r); }
+        else roots.push(0);
+        let coeffs={a:0,b:0,c:0};
+        if(roots.length===3){ const r1=roots[1],r2=roots[2]; coeffs={a:a,b:-a*(r1+r2),c:a*(r1*r2)}; }
+        else { const p=randInt(-3,3); const q=randInt(1,4); coeffs={a:a,b:a*p,c:a*q}; }
+        const realRoots=uniqSorted(roots.map(Number));
+        return {type:'cubic', coeffs, roots:realRoots};
+      }
+
+      function makeQuartic(){
+        const a=[1,-1,2,-2][randInt(0,3)];
+        const r1=Math.abs(randInt(1,4));
+        const r2=Math.abs(randInt(0,4));
+        const A=a, B=-a*(r1*r1 + r2*r2), C=a*(r1*r1*r2*r2);
+        const roots=[]; if(r1!==0){roots.push(-r1,r1);} if(r2!==0){roots.push(-r2,r2);} 
+        const unique=uniqSorted(roots.map(Number));
+        return {type:'quartic', coeffs:{A,B,C}, roots:unique};
+      }
+
+      function formatPoly(obj){
+        function term(coef,power){ if(coef===0) return ''; let s=''; if(coef===-1&&power!==0) s+='-'; else if(coef!==1||power===0) s+=coef; if(power>0){s+='x'; if(power>1) s+='^'+power;} return s; }
+        if(obj.type==='cubic'){
+          const co=obj.coeffs; const parts=[term(co.a,3),term(co.b,2),term(co.c,1)].filter(Boolean);
+          return '$$'+parts.join(' + ').replace(/\+ -/g,'- ')+' = 0$$';
+        } else {
+          const co=obj.coeffs; const parts=[term(co.A,4),term(co.B,2),term(co.C,0)].filter(Boolean);
+          return '$$'+parts.join(' + ').replace(/\+ -/g,'- ')+' = 0$$';
+        }
+      }
+
+      let current=null; let attempts=0;
+
+      function renderCurrent(){
+        attempts=0; nextBtn.style.display='none'; showSolutionBtn.style.display='none';
+        feedback.innerHTML=''; solutionBox.style.display='none'; solutionBox.innerHTML='';
+        if(!current) return;
+        eqEl.innerHTML = formatPoly(current); renderMath(eqEl);
+        const R=current.roots||[]; current.realRoots=R.slice();
+        inputArea.innerHTML='';
+        const label=document.createElement('div'); label.innerHTML=`<strong>Anzahl gesuchter reeller Nullstellen:</strong> ${R.length}`; inputArea.appendChild(label);
+        const fields=document.createElement('div'); fields.className='fields';
+        for(let i=0;i<R.length;i++){ const inp=document.createElement('input'); inp.type='text'; inp.placeholder='Nullstelle '+(i+1); inp.className='root'; fields.appendChild(inp); }
+        if(R.length===0){ const info=document.createElement('div'); info.style.marginTop='8px'; info.textContent='Hinweis: Diese Funktion hat keine reellen Nullstellen.'; inputArea.appendChild(info); }
+        inputArea.appendChild(fields);
+      }
+
+      function showTask(){ current = Math.random()<0.5?makeCubic():makeQuartic(); renderCurrent(); }
+
+      function solAccordion(sections){
+        return sections.map(({title,body,open})=>`<details${open?' open':''}><summary>${title}</summary><div style="margin-top:6px">${body}</div></details>`).join('');
+      }
+
+      function buildSolutionHTML(){
+        const cr=current; const steps=[];
+        if(cr.type==='cubic'){
+          const a=cr.coeffs.a, b=cr.coeffs.b, c=cr.coeffs.c;
+          const p=b/a, q=c/a; const halfp=p/2; const disc = halfp*halfp - q; const sqrtD=Math.sqrt(Math.max(0,disc));
+          const roots = [0];
+          if(disc>1e-12){ roots.push(-p/2+sqrtD, -p/2-sqrtD); }
+          else if(Math.abs(disc)<=1e-12){ roots.push(-p/2); }
+          const realRoots = uniqSorted(roots.map(v=>Object.is(v,-0)?0:v));
+
+          steps.push({
+            title:'1) Ausklammern',
+            body:`$$${a}x^{3} ${b>=0?'+':'-'} ${absRound(b)}x^{2} ${c>=0?'+':'-'} ${absRound(c)}x = x\left(${a}x^{2} ${b>=0?'+':'-'} ${absRound(b)}x ${c>=0?'+':'-'} ${absRound(c)}\right)$$`
+          });
+          steps.push({
+            title:'2) Satz vom Nullprodukt',
+            body:`Setze jeden Faktor gleich $0$: $$x=0 \quad \text{oder} \quad ${a}x^{2} ${b>=0?'+':'-'} ${absRound(b)}x ${c>=0?'+':'-'} ${absRound(c)}=0$$`
+          });
+          steps.push({
+            title:'3) Quadratische Normalform',
+            body:`Division durch ${a}: $$${normalFormLatex(p,q,'x')}$$`
+          });
+          let pqSubs   = `Mit $p=${round4(p)}$, $q=${round4(q)}$: $$x_{1,2}=-\tfrac{${round4(p)}}{2} \pm \sqrt{\left(\tfrac{${round4(p)}}{2}\right)^{2}-${round4(q)}}$$`;
+          let xlines   = '';
+          if(disc < -1e-12){
+            xlines = `Da $\Delta<0$, keine weiteren reellen Lösungen.`;
+          } else {
+            const x1 = -p/2 + sqrtD; const x2 = -p/2 - sqrtD;
+            xlines = `$$x_1 = ${round4(x1)}$$`+
+                     `<br>$$x_2 = ${round4(x2)}$$`;
+          }
+          steps.push({title:'4) pq-Formel anwenden', body: pqSubs + '<br>' + xlines});
+          const pts = realRoots.map((r,i)=>`S_{x_${i+1}}(${round4(r)},0)`).join(',\; ');
+          steps.push({title:'5) Zusammenfassung', body: (realRoots.length? `Schnittpunkte mit der x-Achse: $$${pts}$$` : 'Keine reellen Schnittpunkte.'), open:true});
+          return solAccordion(steps);
+        } else {
+          const A=cr.coeffs.A, B=cr.coeffs.B, C=cr.coeffs.C; const p=B/A, q=C/A; const halfp=p/2; const disc=halfp*halfp-q; const sqrtD=Math.sqrt(Math.max(0,disc));
+          const zs = [];
+          if(disc< -1e-12){ /* no real z */ }
+          else if(Math.abs(disc)<=1e-12){ zs.push(-p/2); }
+          else { zs.push(-p/2+sqrtD, -p/2-sqrtD); }
+          const xvals=[];
+          for(const z of zs){ if(z>=-1e-12){ const zc=Math.max(0,z); const r=Math.sqrt(zc); if(Math.abs(r)<1e-12){ xvals.push(0); } else { xvals.push(-r, r); } } }
+          const realRoots = uniqSorted(xvals);
+
+          const step1 = `Setze $z = x^{2}$ und erhalte: $$${A}z^{2} ${B>=0?'+':'-'} ${absRound(B)}z ${C>=0?'+':'-'} ${absRound(C)} = 0$$`;
+          const step2 = `Division durch ${A}: $$${normalFormLatex(p,q,'z')}$$`;
+          const pqSubs   = `Mit $p=${round4(p)}$, $q=${round4(q)}$: $$z_{1,2}=-\tfrac{${round4(p)}}{2} \pm \sqrt{\left(\tfrac{${round4(p)}}{2}\right)^{2}-${round4(q)}}$$`;
+          let zlines = '';
+          if(disc < -1e-12){
+            zlines = `Da $\Delta<0$, keine reellen $z$.`;
+          } else {
+            const z1 = -p/2 + sqrtD; const z2 = -p/2 - sqrtD;
+            zlines = `$$z_1 = ${round4(z1)}$$`+
+                     `<br>$$z_2 = ${round4(z2)}$$`;
+          }
+          let back='Rücksubstitution:';
+          if(zs.length){
+            const parts = zs.map((z,idx)=>{
+              if(z< -1e-12) return '';
+              const zc=Math.max(0,z); const r=Math.sqrt(zc);
+              if(Math.abs(r)<1e-12){ return `$$z_${idx+1}=${round4(zc)}:\quad x_1 = 0$$`; }
+              return `$$z_${idx+1}=${round4(zc)}:\quad x = \pm\sqrt{${round4(zc)}}$$`+
+                     `<br>$$x_1 = ${round4(-r)}\quad x_2 = ${round4(r)}$$`;
+            }).filter(Boolean).join('<br>');
+            back += '<br>'+parts;
+          } else {
+            back += ' entfällt, da kein reelles $z$.';
+          }
+          const pts = realRoots.map((r,i)=>`S_{x_${i+1}}(${round4(r)},0)`).join(',\; ');
+
+          return solAccordion([
+            {title:'1) Substitution', body: step1},
+            {title:'2) Quadratische Normalform', body: step2},
+            {title:'3) pq-Formel anwenden', body: pqSubs + '<br>' + zlines},
+            {title:'4) Rücksubstitution', body: back},
+            {title:'5) Zusammenfassung', body: (realRoots.length? `Schnittpunkte mit der x-Achse: $$${pts}$$` : 'Keine reellen Schnittpunkte.'), open:true}
+          ]);
+        }
+      }
+
+      function normalize(vs){ return vs.map(parseNumber).filter(v=>!Number.isNaN(v)).sort((a,b)=>a-b); }
+
+      function checkAnswer(){
+        const expected = (current.realRoots||[]).slice().sort((a,b)=>a-b);
+        const entered = normalize(Array.from(document.querySelectorAll('.root')).map(i=>i.value));
+        if(expected.length===0){
+          if(entered.length===0){ feedback.innerHTML='<div class="success">Richtig! Diese Funktion hat keine reellen Nullstellen.</div>'; nextBtn.style.display='inline-block'; showSolutionBtn.style.display='inline-block'; }
+          else { feedback.innerHTML='<div class="hint">Tipp: Prüfe die Diskriminante. Es könnte keine reellen Lösungen geben.</div>'; }
+          renderMath(feedback); return;
+        }
+        const sameLength = entered.length===expected.length;
+        const allOk = sameLength && expected.every((v,i)=>approxEqual(v,entered[i]));
+        if(allOk){ feedback.innerHTML='<div class="success">Richtig! Gute Arbeit.</div>'; nextBtn.style.display='inline-block'; showSolutionBtn.style.display='inline-block'; }
+        else {
+          attempts++;
+          if(attempts===1){
+            const eqLatex = formatPoly(current);
+            if(current.type==='cubic'){
+              const {a,b,c}=current.coeffs; const p=b/a, q=c/a;
+              feedback.innerHTML = `<div class="hint"><strong>Tipp zur aktuellen Funktion:</strong><br>${eqLatex}`+
+                `<br>Ansatz: $x$ ausklammern; pq-Formel mit $p=${round4(p)}$, $q=${round4(q)}$.</div>`;
+            } else {
+              const {A,B,C}=current.coeffs; const p=B/A, q=C/A;
+              feedback.innerHTML = `<div class="hint"><strong>Tipp zur aktuellen Funktion:</strong><br>${eqLatex}`+
+                `<br>Ansatz: $z=x^{2}$; pq-Formel mit $p=${round4(p)}$, $q=${round4(q)}$; nur $z\ge 0$ zurücksubstituieren.</div>`;
+            }
+          } else {
+            feedback.innerHTML = `<div class="hint">Im zweiten Versuch falsch. Richtige Nullstellen: ${expected.join(', ')}.</div>`;
+            showSolutionBtn.style.display='inline-block'; nextBtn.style.display='inline-block';
+          }
+        }
+        renderMath(feedback);
+      }
+
+      function revealSolution(){ solutionBox.innerHTML = buildSolutionHTML(); solutionBox.style.display='block'; renderMath(solutionBox); }
+
+      function showEndScreen(){
+        const overlay = document.createElement('div'); overlay.className='overlay-end';
+        overlay.innerHTML = `<div class='end-card'><h2>Auf Wiedersehen!</h2><p>Gut gemacht — bis zum nächsten Mal :)</p></div>`;
+        document.body.appendChild(overlay);
+      }
+
+      submitBtn.addEventListener('click', checkAnswer);
+      skipBtn.addEventListener('click', showTask);
+      nextBtn.addEventListener('click', showTask);
+      endBtn.addEventListener('click', showEndScreen);
+      showSolutionBtn.addEventListener('click', revealSolution);
+
+      showTask();
+    });
+  </script>
+</body>
+</html>
